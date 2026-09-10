@@ -1,0 +1,23 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/ui"
+    },
+    {
+      "path": "./apps/hello-hud"
+    },
+    {
+      "path": "./tools/protocol-lab"
+    },
+    {
+      "path": "./tools/hud-shim"
+    },
+    {
+      "path": "./apps/dev-hud"
+    }
+  ]
+}

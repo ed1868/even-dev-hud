@@ -1,0 +1,130 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Cert Probe</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 20px;
+    font: 16px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #0b0d10; color: #e6e9ef;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 18px; color: #8b94a7; font-size: 13px; }
+  .t {
+    border: 1px solid #232833; border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 10px; background: #14171d;
+  }
+  .t .n { font-size: 12px; color: #8b94a7; margin-bottom: 4px; }
+  .t .r { font-size: 17px; font-weight: 600; }
+  .t .d { font-size: 12px; color: #8b94a7; margin-top: 5px; word-break: break-all; }
+  .pending .r { color: #8b94a7; }
+  .pass .r { color: #6ee7a8; }
+  .fail .r { color: #ff8b8b; }
+  #verdict {
+    margin-top: 18px; padding: 16px; border-radius: 10px;
+    font-size: 16px; font-weight: 600; line-height: 1.45;
+    background: #14171d; border: 1px solid #232833;
+  }
+  img.probe { width: 1px; height: 1px; opacity: 0; position: absolute; }
+</style>
+
+<h1>Cert Probe</h1>
+<p class="sub">Does this WebView trust <code>ais-mac-mini.tail7ed4e6.ts.net</code>?</p>
+
+<div class="t pending" id="t0"><div class="n">0 · control — can this page fetch at all?</div><div class="r">…</div><div class="d"></div></div>
+<div class="t pending" id="t1"><div class="n">1 · image over TLS — no CORS involved</div><div class="r">…</div><div class="d"></div></div>
+<div class="t pending" id="t2"><div class="n">2 · fetch no-cors — TLS + network only</div><div class="r">…</div><div class="d"></div></div>
+<div class="t pending" id="t3"><div class="n">3 · fetch cors — TLS + CORS headers</div><div class="r">…</div><div class="d"></div></div>
+
+<div id="verdict">running…</div>
+
+<script type="module">
+  const ORIGIN = 'https://ais-mac-mini.tail7ed4e6.ts.net';
+  const results = {};
+
+  function set(id, state, text, detail) {
+    const el = document.getElementById(id);
+    el.className = `t ${state}`;
+    el.querySelector('.r').textContent = text;
+    el.querySelector('.d').textContent = detail ?? '';
+  }
+
+  // 0 — control. Same-origin, proves fetch works in this WebView at all.
+  async function t0() {
+    try {
+      const r = await fetch(location.href, { cache: 'no-store' });
+      results.control = r.ok;
+      set('t0', r.ok ? 'pass' : 'fail', r.ok ? 'PASS' : `FAIL ${r.status}`, location.origin);
+    } catch (e) {
+      results.control = false;
+      set('t0', 'fail', 'FAIL', String(e));
+    }
+  }
+
+  // 1 — image load. Images are not CORS-gated for display, so success here means
+  // the TLS handshake and the tailnet route both worked. This is the cleanest signal.
+  function t1() {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.className = 'probe';
+      const done = (ok, detail) => {
+        results.tls = ok;
+        set('t1', ok ? 'pass' : 'fail', ok ? 'PASS' : 'FAIL', detail);
+        resolve();
+      };
+      const timer = setTimeout(() => done(false, 'timed out after 8s'), 8000);
+      img.onload = () => { clearTimeout(timer); done(true, `${ORIGIN}/favicon-32.png`); };
+      img.onerror = () => { clearTimeout(timer); done(false, 'cert rejected, or not on the tailnet'); };
+      img.src = `${ORIGIN}/favicon-32.png?cb=${Date.now()}`;
+      document.body.appendChild(img);
+    });
+  }
+
+  // 2 — no-cors fetch. Resolves opaque when TLS + network succeed, even if CORS
+  // would block reading the body. Isolates transport from CORS.
+  async function t2() {
+    try {
+      await fetch(`${ORIGIN}/health`, { mode: 'no-cors', cache: 'no-store' });
+      results.nocors = true;
+      set('t2', 'pass', 'PASS', 'opaque response — transport is fine');
+    } catch (e) {
+      results.nocors = false;
+      set('t2', 'fail', 'FAIL', String(e));
+    }
+  }
+
+  // 3 — real CORS fetch. Only meaningful if 1 and 2 passed.
+  async function t3() {
+    try {
+      const r = await fetch(`${ORIGIN}/health`, { cache: 'no-store' });
+      const body = (await r.text()).slice(0, 120);
+      results.cors = r.ok;
+      set('t3', r.ok ? 'pass' : 'fail', r.ok ? 'PASS' : `FAIL ${r.status}`, body);
+    } catch (e) {
+      results.cors = false;
+      set('t3', 'fail', 'FAIL', `${e} — likely CORS, not TLS`);
+    }
+  }
+
+  function verdict() {
+    const v = document.getElementById('verdict');
+    let text;
+    if (!results.control) {
+      text = '⚠ Control failed. This page cannot fetch anything — something is wrong with the test itself, not the cert.';
+    } else if (results.tls || results.nocors) {
+      text = results.cors
+        ? '✅ GREEN LIGHT — the WebView trusts the cert and CORS is open. Proceed to Phase A.'
+        : '✅ CERT IS TRUSTED — transport works. CORS is blocked, which the shim fixes with a header. Proceed to Phase A.';
+    } else {
+      text = '❌ TRANSPORT FAILED — either the cert is rejected or this phone is not on the tailnet. Check Safari first (see below), then re-run.';
+    }
+    v.textContent = text;
+  }
+
+  await t0();
+  await t1();
+  await t2();
+  await t3();
+  verdict();
+  console.log('[cert-probe]', JSON.stringify(results));
+</script>

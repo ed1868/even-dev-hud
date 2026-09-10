@@ -1,0 +1,43 @@
+<meta charset="utf-8" />
+<title>G2 Protocol Lab</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 24px; max-width: 900px;
+    font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #0b0d10; color: #e6e9ef;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .warn {
+    border: 1px solid #5a4415; background: #241c08; color: #f0c674;
+    padding: 10px 12px; border-radius: 8px; margin: 12px 0 20px;
+  }
+  button, input {
+    font: inherit; background: #1b1f27; color: #e6e9ef;
+    border: 1px solid #2c323e; border-radius: 6px; padding: 7px 12px;
+  }
+  button:hover { background: #232833; cursor: pointer; }
+  input { width: 320px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  #log {
+    white-space: pre-wrap; word-break: break-all;
+    background: #14171d; border: 1px solid #232833; border-radius: 8px;
+    padding: 12px; min-height: 40vh;
+  }
+</style>
+<h1>G2 Protocol Lab</h1>
+<div class="warn">
+  Community-reverse-engineered protocol, not an Even Realities interface. UUIDs and
+  framing come from <code>i-soxi/even-g2-protocol</code> and are unverified here.
+  Chrome only, over localhost.
+</div>
+<div class="row">
+  <button id="connect">Connect a lens</button>
+  <button id="disconnect">Disconnect all</button>
+</div>
+<div class="row">
+  <input id="payload" placeholder="payload hex, e.g. 4e 01" value="4e 01" />
+  <button id="send">Send on content channel</button>
+</div>
+<div id="log">idle</div>
+<script type="module" src="/src/main.ts"></script>

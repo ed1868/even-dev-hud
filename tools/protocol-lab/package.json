@@ -1,0 +1,14 @@
+{
+  "name": "@even/protocol-lab",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Web Bluetooth sandbox for talking to the G2 lenses directly, outside the Even Hub app sandbox.",
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@types/web-bluetooth": "^0.0.21"
+  }
+}

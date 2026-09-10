@@ -1,0 +1,31 @@
+{
+  "name": "even-realities-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Monorepo for Even Realities G2 work: Even Hub apps, shared packages, and a raw BLE protocol lab.",
+  "engines": {
+    "node": "^20.0.0 || >=22.0.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -b --pretty",
+    "clean": "rm -rf **/*.tsbuildinfo **/dist node_modules/.vite",
+    "dev": "npm run dev -w @even/hello-hud",
+    "qr": "evenhub qr",
+    "lab": "npm run dev -w @even/protocol-lab"
+  },
+  "devDependencies": {
+    "@evenrealities/evenhub-cli": "^0.1.14",
+    "@evenrealities/evenhub-simulator": "^0.9.5",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "package_id": "com.ed1868.devhud",
+  "edition": "202601",
+  "name": "Dev HUD",
+  "version": "0.1.0",
+  "min_app_version": "2.2.10",
+  "min_sdk_version": "0.0.15",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Reads build, job, and agent status from your own machine over Tailscale.",
+      "whitelist": ["https://ais-mac-mini.tail7ed4e6.ts.net"]
+    }
+  ],
+  "supported_languages": ["en"]
+}

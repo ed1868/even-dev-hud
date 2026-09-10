@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Control script for the Dev HUD's long-running pieces.
+# Exists because ad-hoc `npm start` in a terminal leaves orphans that hold ports
+# and serve stale config — the single most time-wasting failure in this project.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SHIM_PORT="${HUD_PORT:-7777}"
+
+port_pid() { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1; }
+proc_line() { ps -p "$1" -o lstart=,command= 2>/dev/null | sed 's/  */ /g'; }
+
+row() {
+  local label=$1 port=$2 pid; pid="$(port_pid "$port" || true)"
+  if [ -n "${pid:-}" ]; then
+    printf '  %-18s :%-6s pid %-7s %s\n' "$label" "$port" "$pid" "$(proc_line "$pid" | cut -c1-70)"
+  else
+    printf '  %-18s :%-6s %s\n' "$label" "$port" "not running"
+  fi
+}
+
+cmd_status() {
+  echo "Dev HUD services:"
+  row "hud-shim"        "$SHIM_PORT"
+  row "even-terminal"   3456
+  row "openclaw-gw"     18789
+  row "postgres"        5432
+  echo
+  if [ -n "$(port_pid "$SHIM_PORT" || true)" ]; then
+    echo "shim health:"
+    curl -s --max-time 3 "http://127.0.0.1:$SHIM_PORT/v1/health" > /tmp/.devhud-health.json 2>/dev/null || true
+    if [ -s /tmp/.devhud-health.json ]; then
+      python3 "$ROOT/scripts/health-report.py" < /tmp/.devhud-health.json
+    else
+      echo "  (no response)"
+    fi
+    rm -f /tmp/.devhud-health.json
+  fi
+}
+
+cmd_stop() {
+  local pid; pid="$(port_pid "$SHIM_PORT" || true)"
+  if [ -n "${pid:-}" ]; then
+    echo "stopping shim (pid $pid)"
+    kill "$pid" 2>/dev/null || true
+    sleep 1
+    pid="$(port_pid "$SHIM_PORT" || true)"
+    if [ -n "${pid:-}" ]; then echo "force killing $pid"; kill -9 "$pid" || true; fi
+  else
+    echo "shim not running"
+  fi
+}
+
+cmd_start() {
+  # Note: `test && { ... }` here would exit the script under `set -e` whenever the
+  # test fails, which is the common case. Use an explicit if.
+  local pid; pid="$(port_pid "$SHIM_PORT" || true)"
+  if [ -n "${pid:-}" ]; then
+    echo "already running (pid $pid) — use 'devhud restart'"
+    return 1
+  fi
+  cd "$ROOT/tools/hud-shim"
+  nohup node --env-file=.env src/index.ts > "$ROOT/.devhud-shim.log" 2>&1 &
+  sleep 2; cmd_status
+}
+
+case "${1:-status}" in
+  status)  cmd_status ;;
+  start)   cmd_start ;;
+  stop)    cmd_stop ;;
+  restart) cmd_stop; sleep 1; cmd_start ;;
+  logs)    tail -f "$ROOT/.devhud-shim.log" ;;
+  *) echo "usage: devhud {status|start|stop|restart|logs}"; exit 1 ;;
+esac

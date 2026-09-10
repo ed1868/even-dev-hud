@@ -1,0 +1,26 @@
+# Postgres archive for the Dev HUD. SQLite stays the hot store the shim reads;
+# this holds long-retention history and is what the MacBook connects to over the tailnet.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: devhud-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: devhud
+      POSTGRES_USER: devhud
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
+    ports:
+      # Loopback only. Tailnet access goes through `tailscale serve --tcp`,
+      # so this is never on the LAN.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - devhud-pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devhud -d devhud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  devhud-pgdata:

@@ -1,0 +1,29 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+*.ehpk
+.DS_Store
+.env
+.env.*
+!.env.example
+.vite/
+
+# secrets
+infra/.env
+.env
+
+# even-terminal session logs
+even-terminal-*.log
+
+# shim runtime log
+.devhud-shim.log
+
+# vite local env
+.env.local
+
+# generated type output
+dist-types/
+
+# all logs
+*.log

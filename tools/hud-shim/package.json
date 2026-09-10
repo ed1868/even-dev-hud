@@ -1,0 +1,19 @@
+{
+  "name": "@even/hud-shim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only aggregation service behind the Dev HUD. Holds every credential; the glasses hold none.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file=.env src/index.ts",
+    "collect": "node --env-file=.env src/collect-once.ts",
+    "dev": "node --env-file=.env --watch src/index.ts",
+    "show": "node --env-file=.env src/show.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0"
+  }
+}

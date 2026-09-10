@@ -1,0 +1,11 @@
+{
+  "name": "@even/cert-probe",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One-off: does the Even app WebView trust the Tailscale cert? Blocks the whole Dev HUD plan.",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5180",
+    "qr": "evenhub qr --ip \"$(ipconfig getifaddr \"$(route -n get default | awk '/interface:/{print $2}')\")\" --port 5180 --http"
+  }
+}

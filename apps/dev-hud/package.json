@@ -1,0 +1,17 @@
+{
+  "name": "@even/dev-hud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Dev HUD: jobs, GitHub, and OpenClaw on the glasses. Read-only.",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5175",
+    "build": "vite build",
+    "qr": "evenhub qr --ip \"$(ipconfig getifaddr \"$(route -n get default | awk '/interface:/{print $2}')\")\" --port 5175 --http",
+    "pack": "npm run build && evenhub pack app.json ./dist --output ../../dev-hud.ehpk"
+  },
+  "dependencies": {
+    "@even/core": "*",
+    "@even/ui": "*"
+  }
+}

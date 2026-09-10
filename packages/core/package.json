@@ -1,0 +1,13 @@
+{
+  "name": "@even/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bridge lifecycle, typed event routing, and disposal management over @evenrealities/even_hub_sdk.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "^0.0.15"
+  }
+}
