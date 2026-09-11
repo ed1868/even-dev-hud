@@ -10,7 +10,8 @@
   "workspaces": [
     "packages/*",
     "apps/*",
-    "tools/*"
+    "tools/*",
+    "services/*"
   ],
   "scripts": {
     "typecheck": "tsc -b --pretty",
