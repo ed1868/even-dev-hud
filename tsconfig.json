@@ -18,6 +18,9 @@
     },
     {
       "path": "./apps/dev-hud"
+    },
+    {
+      "path": "./apps/fact-check"
     }
   ]
 }

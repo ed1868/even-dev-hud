@@ -32,6 +32,26 @@ export type JobRow = {
   updated_at: number;
 };
 
+export type ContextSnippetRow = {
+  id: string;
+  source: string;
+  channel: string | null;
+  author: string | null;
+  text: string;
+  ts: number;
+  fetched_at: number;
+};
+
+export type FactCheckRow = {
+  id: string;
+  transcript: string;
+  claim: string | null;
+  match_count: number;
+  top_match: string | null;
+  sources: string | null;
+  checked_at: number;
+};
+
 export type RunRow = {
   id: string;
   job_id: string;
@@ -146,6 +166,34 @@ CREATE TABLE IF NOT EXISTS source_state (
   last_try_at   INTEGER,
   last_error    TEXT
 );
+
+/* ── Fact check ─────────────────────────────────────────────────────── */
+
+/* Searchable private context pulled from Slack, OpenClaw, etc.
+   The collector owns these rows and rewrites on every pass. */
+CREATE TABLE IF NOT EXISTS context_snippets (
+  id         TEXT PRIMARY KEY,     -- "slack:<channel>:<ts>" or "openclaw:<session>:<idx>"
+  source     TEXT NOT NULL,        -- 'slack' | 'openclaw'
+  channel    TEXT,                 -- Slack channel name or OpenClaw session key
+  author     TEXT,
+  text       TEXT NOT NULL,
+  ts         INTEGER NOT NULL,     -- original message timestamp (epoch ms)
+  fetched_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ctx_source ON context_snippets (source, ts DESC);
+
+/* Results of fact checks, so the glasses can show recent checks and the
+   terminal can review them. */
+CREATE TABLE IF NOT EXISTS fact_checks (
+  id          TEXT PRIMARY KEY,
+  transcript  TEXT NOT NULL,       -- what was said (transcribed or typed)
+  claim       TEXT,                -- extracted claim, if LLM ran
+  match_count INTEGER NOT NULL DEFAULT 0,
+  top_match   TEXT,                -- JSON of the best match, for quick display
+  sources     TEXT,                -- comma-separated source names searched
+  checked_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS fc_checked ON fact_checks (checked_at DESC);
 
 /* Watermark for the one-directional SQLite -> Postgres export. */
 CREATE TABLE IF NOT EXISTS export_state (

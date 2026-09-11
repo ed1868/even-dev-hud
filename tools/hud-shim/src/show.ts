@@ -200,6 +200,43 @@ async function showClaw(): Promise<void> {
   );
 }
 
+async function showContext(): Promise<void> {
+  const d = await api<{
+    total: number;
+    bySource: { source: string; count: number; oldest: number; newest: number }[];
+    fetchedAt: number | null;
+    stale: boolean;
+  }>('/v1/context/stats');
+
+  frame(
+    `Context · ${d.total} snippets${d.stale ? ' ⚠' : ''}`,
+    d.bySource.map((s) => `${pad(s.source, 16)} ${String(s.count).padStart(6)} ${ago(s.oldest)}–${ago(s.newest)}`),
+    d.fetchedAt ? `last indexed ${ago(d.fetchedAt)}` : 'not yet indexed',
+  );
+}
+
+async function showChecks(): Promise<void> {
+  const d = await api<{
+    checks: {
+      id: string; transcript: string; claim: string | null;
+      match_count: number; top_match: string | null; checked_at: number;
+    }[];
+    context: { snippets: number; sources: string[] };
+    fetchedAt: number | null;
+    stale: boolean;
+  }>('/v1/checks');
+
+  frame(
+    `Fact Checks · ${d.checks.length} recent`,
+    d.checks.slice(0, 3).map((c) => {
+      const glyph = c.match_count > 0 ? '✓' : '·';
+      const claim = (c.claim ?? c.transcript).slice(0, 28);
+      return `${glyph} ${pad(claim, 28)} ${c.match_count}m ${ago(c.checked_at)}`;
+    }),
+    `${d.context.snippets} context snippets · ${d.context.sources.join(', ') || 'none'}`,
+  );
+}
+
 // ── entry ──────────────────────────────────────────────────────────────────
 const [what, arg] = process.argv.slice(2);
 
@@ -208,10 +245,14 @@ try {
   else if (what === 'jobs') await showJobs(true);
   else if (what === 'github') await showGithub(true, arg ?? null);
   else if (what === 'openclaw') await showClaw();
+  else if (what === 'context') await showContext();
+  else if (what === 'checks') await showChecks();
   else {
     await showJobs(true);
     await showGithub(true);
     await showClaw();
+    await showContext();
+    await showChecks();
   }
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err);

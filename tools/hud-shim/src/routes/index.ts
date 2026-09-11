@@ -2,7 +2,8 @@ import { config } from '../config.ts';
 import { db, freshness, sourceStates } from '../db.ts';
 import { allJobs, attention, jobById } from '../attention.ts';
 import { gatewayUp } from '../collectors/openclaw-sessions.ts';
-import type { Route } from '../server.ts';
+import { runCheck, recentChecks } from '../check.ts';
+import type { PostRequest, Route } from '../server.ts';
 
 /**
  * Every route reads SQLite and returns immediately. Nothing here blocks on
@@ -10,7 +11,12 @@ import type { Route } from '../server.ts';
  * a source being down must surface as labelled staleness rather than a hang.
  */
 
-const SOURCES = { cron: 'openclaw-cron', sessions: 'openclaw-sessions', github: 'github' } as const;
+const SOURCES = {
+  cron: 'openclaw-cron',
+  sessions: 'openclaw-sessions',
+  github: 'github',
+  context: 'context-indexer',
+} as const;
 
 export const routes: Route[] = [
   {
@@ -175,6 +181,65 @@ export const routes: Route[] = [
         .prepare('SELECT * FROM claw_activity WHERE at >= ? ORDER BY at DESC LIMIT 50')
         .all(since);
       return { items, ...freshness(SOURCES.sessions) };
+    },
+  },
+
+  // ── Fact check ──────────────────────────────────────────────────────
+
+  {
+    method: 'POST',
+    pattern: '/v1/check',
+    handler: async (req) => {
+      const body = (req as PostRequest)._parsedBody as
+        | { text?: string; audio?: string }
+        | undefined;
+      if (!body || (!body.text && !body.audio)) {
+        return { error: 'body must include "text" or "audio"' };
+      }
+      return await runCheck(body);
+    },
+  },
+
+  {
+    method: 'GET',
+    pattern: '/v1/checks',
+    handler: () => {
+      const checks = recentChecks(20);
+      const snippetCount = (
+        db().prepare('SELECT COUNT(*) AS n FROM context_snippets').get() as { n: number }
+      ).n;
+      const sources = (
+        db()
+          .prepare('SELECT DISTINCT source FROM context_snippets')
+          .all() as unknown as { source: string }[]
+      ).map((r) => r.source);
+      return {
+        checks,
+        context: { snippets: snippetCount, sources },
+        ...freshness(SOURCES.context),
+      };
+    },
+  },
+
+  {
+    method: 'GET',
+    pattern: '/v1/context/stats',
+    handler: () => {
+      const total = (
+        db().prepare('SELECT COUNT(*) AS n FROM context_snippets').get() as { n: number }
+      ).n;
+      const bySource = db()
+        .prepare(
+          `SELECT source, COUNT(*) AS count, MIN(ts) AS oldest, MAX(ts) AS newest
+           FROM context_snippets GROUP BY source`,
+        )
+        .all() as unknown as Array<{
+        source: string;
+        count: number;
+        oldest: number;
+        newest: number;
+      }>;
+      return { total, bySource, ...freshness(SOURCES.context) };
     },
   },
 ];

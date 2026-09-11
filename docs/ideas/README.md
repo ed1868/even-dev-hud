@@ -25,6 +25,8 @@ Check an idea against [`../architecture.md`](../architecture.md) before writing 
 | [Conversation check](conversation-check.md) | raw | Fact-checker. Not yet written up — see chat notes. |
 | [Speech-triggered notes](speech-triggered-notes.md) | parked | Different territory; still viable. |
 | [Nod-to-confirm](nod-to-confirm.md) | parked | Different territory; would make the inbox hands-free later. |
+| [Name rescue](name-rescue.md) | raw | Audio-based contact lookup against private sources. |
+| [Hands-free recipe](hands-free-recipe.md) | raw | Voice-navigated recipe steps on the display. |
 
 Statuses: `raw` → `explored` (feasibility checked) → `building` → `shipped` / `parked` / `dead`.
 Keep `dead` ideas with the reason written down; it stops you rediscovering the same wall.

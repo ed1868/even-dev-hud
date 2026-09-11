@@ -120,10 +120,28 @@ export const config = {
     apiBase: env('GITHUB_API') ?? 'https://api.github.com',
   },
 
+  slack: {
+    /** User token (`xoxp-`) — needed instead of bot token for DM access. */
+    userToken: env('SLACK_USER_TOKEN'),
+    /** Comma-separated channel IDs or names to index. */
+    channels: (env('SLACK_CHANNELS') ?? '').split(',').map((c) => c.trim()).filter(Boolean),
+    /** How far back to index on each pass, in days. */
+    lookbackDays: num('SLACK_LOOKBACK_DAYS', 7),
+  },
+
+  whisper: {
+    /** OpenAI API key for Whisper STT. */
+    apiKey: env('OPENAI_API_KEY'),
+    /** Model name — 'whisper-1' is the only hosted option. */
+    model: env('WHISPER_MODEL') ?? 'whisper-1',
+  },
+
   intervals: {
     openclawCronMs: num('HUD_POLL_CRON_MS', 30_000),
     openclawSessionsMs: num('HUD_POLL_SESSIONS_MS', 60_000),
     githubMs: num('HUD_POLL_GITHUB_MS', 30_000),
+    /** Context indexer runs less often — context doesn't need real-time. */
+    contextMs: num('HUD_POLL_CONTEXT_MS', 5 * 60_000),
   },
 
   thresholds: {

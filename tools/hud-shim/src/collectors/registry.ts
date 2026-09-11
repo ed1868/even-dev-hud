@@ -8,6 +8,7 @@ import {
   collectOpenClawSessions,
   SOURCE as SESSIONS_SOURCE,
 } from './openclaw-sessions.ts';
+import { collectContext, SOURCE as CTX_SOURCE } from './context-indexer.ts';
 
 /**
  * Collector scheduler.
@@ -48,6 +49,12 @@ export const collectors: Collector[] = [
     name: 'Collector · GitHub',
     intervalMs: config.intervals.githubMs,
     run: collectGitHub,
+  },
+  {
+    id: CTX_SOURCE,
+    name: 'Collector · Context indexer',
+    intervalMs: config.intervals.contextMs,
+    run: collectContext,
   },
 ];
 

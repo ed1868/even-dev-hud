@@ -1,0 +1,17 @@
+{
+  "name": "@even/fact-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Conversation fact-checker: long-press to check claims against your private context.",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5176",
+    "build": "vite build",
+    "qr": "evenhub qr --ip \"$(ipconfig getifaddr \"$(route -n get default | awk '/interface:/{print $2}')\")\" --port 5176 --http",
+    "pack": "npm run build && evenhub pack app.json ./dist --output ../../fact-check.ehpk"
+  },
+  "dependencies": {
+    "@even/core": "*",
+    "@even/ui": "*"
+  }
+}
