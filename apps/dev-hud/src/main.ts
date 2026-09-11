@@ -11,37 +11,17 @@ import {
 import { readCache, writeCache } from './cache.js';
 import { fail, log } from './log.js';
 
-/**
- * Dev HUD. Three read-only screens, each drillable into detail.
- *
- * Interaction model: **the list holds content, the menu holds navigation.**
- * Scroll the list to move through jobs or repos, click to open that item's
- * detail. Screen switching lives in the contextual menu, so the list never has
- * to double as a nav bar.
- *
- * Two behaviours matter more than the layout:
- *
- *   1. Paint from cache before the first fetch returns. Android may suspend the
- *      WebView and relaunch it cold, and a status board that opens on a spinner
- *      is useless for a two-second glance.
- *   2. Never render stale data as if it were current. A failed poll keeps the
- *      last-good screen but marks it; a lost connection says so.
- */
-
 type ScreenName = 'jobs' | 'github' | 'openclaw';
 
 const MENU = { jobs: 1, github: 2, openclaw: 3, account: 4, view: 5, back: 6, refresh: 7 } as const;
-const POLL_MS = 2000;
+const POLL_MS = 3000;
 
 let screen: Screen | undefined;
 let current: ScreenName = 'jobs';
-/** Selected item id when drilled in; null on the summary screen. */
 let detail: string | null = null;
 let repoTab: RepoTab = 'prs';
-/** GitHub account filter: null = every account, otherwise one identity. */
 let ghAccount: string | null = null;
-/** Last list contents, so we only rebuild the page when they actually change. */
-let listItems: string[] = [];
+let busy = false;
 
 async function main(): Promise<void> {
   if (!isEvenAppWebView()) {
@@ -51,15 +31,16 @@ async function main(): Promise<void> {
   }
 
   const app = await EvenApp.start();
-  log(`bridge ready · launch=${app.launchSource ?? 'pending'}`);
-
-  screen = await Screen.mount(app.bridge, buildPage(['loading…']));
-  log('page mounted');
+  log(`bridge ready`);
 
   const cached = readCache(current);
-  if (cached) await paint(renderSummary(current, cached.data));
+  const items = cached ? listFor(current, cached.data) : ['loading…'];
+  const view = cached ? renderSummary(current, cached.data) : undefined;
+  screen = await Screen.mount(app.bridge, buildPage(items, view));
+  log('mounted');
 
   app.events.on('menu', (e) => {
+    log(`menu ${e.itemID}`);
     switch (e.itemID) {
       case MENU.jobs: void switchTo('jobs'); break;
       case MENU.github: void switchTo('github'); break;
@@ -67,7 +48,6 @@ async function main(): Promise<void> {
       case MENU.back: detail = null; void tick(); break;
       case MENU.refresh: void tick(); break;
       case MENU.view:
-        // Repo detail holds more than one screen can show, so cycle the view.
         repoTab = repoTab === 'prs' ? 'runs' : repoTab === 'runs' ? 'branches' : 'prs';
         void tick();
         break;
@@ -77,15 +57,16 @@ async function main(): Promise<void> {
     }
   });
 
-  // Clicking a list row drills into that item. Scrolling alone does not — you
-  // would otherwise fire a request for every row you pass over.
   app.events.on('list', (e) => {
     const idx = e.currentSelectItemIndex;
     if (typeof idx !== 'number' || idx < 0) return;
+    log(`list ${idx}`);
     void openIndex(idx);
   });
 
-  app.events.on('longPress', ({ pressed }) => { if (pressed) void tick(); });
+  app.events.on('longPress', ({ pressed }) => {
+    if (pressed) { log('long-press'); void tick(); }
+  });
 
   const timer = setInterval(() => void tick(), POLL_MS);
   app.onDispose(() => clearInterval(timer));
@@ -93,15 +74,23 @@ async function main(): Promise<void> {
   await tick();
 }
 
-/** Page layout is constant; only the list contents vary, so rebuilds are rare. */
-function buildPage(items: string[]): PageBuilder {
+/**
+ * Build a page with all content embedded. When `view` is provided, text
+ * containers are pre-filled — no `textContainerUpgrade` call is needed after
+ * the rebuild, which avoids the SDK crash that occurs when setText is called
+ * immediately after rebuildPageContainer.
+ */
+function buildPage(items: string[], view?: ScreenView): PageBuilder {
+  const r0 = view?.rows[0];
+  const r1 = view?.rows[1];
+  const r2 = view?.rows[2];
   return new PageBuilder()
-    .text({ name: 'header', x: 24, y: 18, width: 528, height: 30, content: 'Dev HUD', brightness: 3 })
-    .text({ name: 'row1', x: 24, y: 56, width: 528, height: 30, content: '' })
-    .text({ name: 'row2', x: 24, y: 90, width: 528, height: 30, content: '' })
-    .text({ name: 'row3', x: 24, y: 124, width: 528, height: 30, content: '' })
+    .text({ name: 'header', x: 24, y: 18, width: 528, height: 30, content: view?.header ?? 'Dev HUD', brightness: 3 })
+    .text({ name: 'row1', x: 24, y: 56, width: 528, height: 30, content: r0?.text ?? '', brightness: r0?.brightness ?? 1 })
+    .text({ name: 'row2', x: 24, y: 90, width: 528, height: 30, content: r1?.text ?? '', brightness: r1?.brightness ?? 1 })
+    .text({ name: 'row3', x: 24, y: 124, width: 528, height: 30, content: r2?.text ?? '', brightness: r2?.brightness ?? 1 })
     .list({ name: 'items', x: 24, y: 158, width: 528, height: 46, items: items.length ? items : ['—'], focus: true })
-    .text({ name: 'footer', x: 24, y: 212, width: 528, height: 30, content: '', brightness: 1 })
+    .text({ name: 'footer', x: 24, y: 212, width: 528, height: 30, content: view?.footer ?? '', brightness: 1 })
     .menuItem('Jobs', MENU.jobs)
     .menuItem('GitHub', MENU.github)
     .menuItem('OpenClaw', MENU.openclaw)
@@ -112,23 +101,27 @@ function buildPage(items: string[]): PageBuilder {
 }
 
 /**
- * Rebuild only when the list actually changed. `rebuildPageContainer` replaces
- * every container, so doing it on each 2s poll would make the display flicker
- * and waste the link.
+ * Switch screen: rebuild the entire page with content baked in.
+ * No setText is called after rebuild — the bridge needs time to settle.
+ * The next poll tick (≤3 s) will refresh with live data via paint().
  */
-async function setList(items: string[]): Promise<void> {
-  const same = items.length === listItems.length && items.every((v, i) => v === listItems[i]);
-  if (same || !screen) return;
-  listItems = items;
-  await screen.rebuild(buildPage(items));
-}
-
 async function switchTo(next: ScreenName): Promise<void> {
-  current = next;
-  detail = null;
-  const cached = readCache(next);
-  if (cached) await paint(renderSummary(next, cached.data));
-  await tick();
+  if (busy || !screen) return;
+  busy = true;
+  try {
+    current = next;
+    detail = null;
+
+    const cached = readCache(next);
+    const items = cached ? listFor(next, cached.data) : ['loading…'];
+    const view = cached ? renderSummary(next, cached.data) : undefined;
+    await screen.rebuild(buildPage(items, view));
+    log(`→ ${next} · ${items.length}`);
+  } catch (err) {
+    log(`switch err: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    busy = false;
+  }
 }
 
 async function openIndex(idx: number): Promise<void> {
@@ -137,33 +130,43 @@ async function openIndex(idx: number): Promise<void> {
   if (current === 'jobs') {
     const jobs = (cached.data as JobsResponse).jobs;
     const picked = jobs[idx];
-    if (picked) { detail = picked.id; await tick(); }
+    if (picked) { detail = picked.id; log(`drill → ${picked.name}`); void tick(); }
   } else if (current === 'github') {
     const repos = githubRepos(cached.data as GhResponse, ghAccount);
     const picked = repos[idx];
-    if (picked) { detail = picked.name.split('/')[1] ?? picked.name; repoTab = 'prs'; await tick(); }
+    if (picked) {
+      detail = picked.name.split('/')[1] ?? picked.name;
+      repoTab = 'prs';
+      log(`drill → ${detail}`);
+      void tick();
+    }
   }
 }
 
-/**
- * Cycle: all accounts → each account in turn → back to all. The available
- * accounts come from the payload, so adding one to the shim's config makes it
- * appear here without an app change.
- */
 async function cycleAccount(): Promise<void> {
-  if (current !== 'github') return;
-  const cached = readCache('github');
-  const accounts = cached ? ((cached.data as GhResponse).accounts ?? []) : [];
-  if (accounts.length < 2) return; // nothing to filter between
-  const order: (string | null)[] = [null, ...accounts];
-  const idx = order.indexOf(ghAccount);
-  ghAccount = order[(idx + 1) % order.length] ?? null;
-  detail = null;
-  if (cached) {
-    await setList(listFor('github', cached.data));
-    await paint(renderSummary('github', cached.data));
+  if (current !== 'github' || busy || !screen) return;
+  busy = true;
+  try {
+    const cached = readCache('github');
+    const accounts = cached ? ((cached.data as GhResponse).accounts ?? []) : [];
+    if (accounts.length < 2) return;
+    const order: (string | null)[] = [null, ...accounts];
+    const idx = order.indexOf(ghAccount);
+    ghAccount = order[(idx + 1) % order.length] ?? null;
+    detail = null;
+    log(`account → ${ghAccount ?? 'all'}`);
+
+    if (cached) {
+      const items = listFor('github', cached.data);
+      const view = renderSummary('github', cached.data);
+      await screen.rebuild(buildPage(items, view));
+      log(`→ github · ${items.length}`);
+    }
+  } catch (err) {
+    log(`account err: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    busy = false;
   }
-  await tick();
 }
 
 function renderSummary(name: ScreenName, data: unknown): ScreenView {
@@ -175,14 +178,19 @@ function renderSummary(name: ScreenName, data: unknown): ScreenView {
 function listFor(name: ScreenName, data: unknown): string[] {
   if (name === 'jobs') return (data as JobsResponse).jobs.map((j) => j.name);
   if (name === 'github') {
-    // Must match exactly what githubScreen renders, or clicking row N opens the
-    // wrong repo.
     return githubRepos(data as GhResponse, ghAccount).map((r) => r.name.split('/')[1] ?? r.name);
   }
   return (data as ClawResponse).channels.map((c) => c.name);
 }
 
+/**
+ * Poll tick. Fetches data and updates text containers only — never rebuilds.
+ * The 3-second interval means the bridge always has time to settle after any
+ * rebuild from switchTo().
+ */
 async function tick(): Promise<void> {
+  if (busy) return;
+  busy = true;
   const name = current;
   const item = detail;
   try {
@@ -191,7 +199,6 @@ async function tick(): Promise<void> {
         name === 'jobs'
           ? jobDetailScreen(await api.job(item) as JobDetail)
           : repoDetailScreen(await api.repo(item) as RepoDetail, repoTab);
-      // A slow response must not overwrite a screen you already navigated away from.
       if (name !== current || item !== detail) return;
       await paint(view);
       return;
@@ -203,13 +210,15 @@ async function tick(): Promise<void> {
     if (name !== current || detail !== null) return;
 
     writeCache(name, data);
-    await setList(listFor(name, data));
     await paint(renderSummary(name, data));
   } catch (err) {
     if (name !== current) return;
     const cached = readCache(name);
     const message = err instanceof ShimError ? err.message : 'error';
+    log(`tick: ${message}`);
     await paint(errorScreen(titleOf(name), message, cached?.at ?? null));
+  } finally {
+    busy = false;
   }
 }
 
@@ -219,13 +228,17 @@ function titleOf(name: ScreenName): string {
 
 async function paint(view: ScreenView): Promise<void> {
   if (!screen) return;
-  const rows = ['row1', 'row2', 'row3'] as const;
-  await screen.setText('header', view.header, { brightness: 3 });
-  for (let i = 0; i < rows.length; i++) {
-    const row = view.rows[i];
-    await screen.setText(rows[i]!, row?.text ?? '', { brightness: row?.brightness ?? 1 });
+  try {
+    await screen.setText('header', view.header, { brightness: 3 });
+    const rows = ['row1', 'row2', 'row3'] as const;
+    for (let i = 0; i < rows.length; i++) {
+      const row = view.rows[i];
+      await screen.setText(rows[i]!, row?.text ?? '', { brightness: row?.brightness ?? 1 });
+    }
+    await screen.setText('footer', view.footer, { brightness: 1 });
+  } catch (err) {
+    log(`paint err: ${err instanceof Error ? err.message : String(err)}`);
   }
-  await screen.setText('footer', view.footer, { brightness: 1 });
 }
 
 main().catch(fail);

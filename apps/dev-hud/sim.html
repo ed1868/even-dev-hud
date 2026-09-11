@@ -1,0 +1,108 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dev HUD · Simulator</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #0b0d10; color: #e6e9ef;
+    padding: 16px;
+  }
+  h1 { font-size: 15px; margin-bottom: 4px; }
+  .sub { color: #8b94a7; font-size: 11px; margin-bottom: 12px; }
+
+  .layout { display: flex; gap: 16px; flex-wrap: wrap; }
+  .panel { flex: 1; min-width: 300px; }
+
+  /* Glasses display */
+  .display-wrap {
+    background: #111; border: 2px solid #333; border-radius: 8px;
+    padding: 8px; display: inline-block; margin-bottom: 12px;
+  }
+  canvas { display: block; image-rendering: pixelated; }
+
+  /* Controls */
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .controls button {
+    font: inherit; font-size: 12px; padding: 6px 12px;
+    background: #1a1d24; color: #e6e9ef; border: 1px solid #333;
+    border-radius: 6px; cursor: pointer; transition: background .15s;
+  }
+  .controls button:hover { background: #2a2d34; }
+  .controls button:active { background: #3a3d44; }
+  .controls .sep { width: 1px; background: #333; margin: 0 4px; }
+
+  .list-btns button { background: #0d1a2e; border-color: #1a3a5c; }
+  .list-btns button:hover { background: #1a2a4e; }
+
+  /* Logs */
+  .log-label { font-size: 11px; color: #8b94a7; margin: 8px 0 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .log {
+    background: #14171d; border: 1px solid #232833; border-radius: 6px;
+    padding: 8px; font-size: 11px; height: 200px; overflow-y: auto;
+    overflow-x: hidden; word-break: break-word;
+  }
+  .log .err { color: #ff8b8b; }
+
+  .status-bar {
+    display: flex; gap: 16px; margin-bottom: 12px;
+    font-size: 11px; color: #8b94a7;
+  }
+  .status-bar span { padding: 3px 8px; background: #14171d; border-radius: 4px; }
+  .status-bar .active { color: #7dd3fc; background: #0c2a4a; }
+</style>
+
+<h1>Dev HUD — Browser Simulator</h1>
+<p class="sub">Same render + API code as the glasses app. Bridge calls are logged, not executed.</p>
+
+<div class="status-bar">
+  <span>Screen: <b id="st-screen">jobs</b></span>
+  <span>Detail: <b id="st-detail">—</b></span>
+  <span>Busy: <b id="st-busy">no</b></span>
+  <span>Tab: <b id="st-tab">prs</b></span>
+</div>
+
+<div class="layout">
+  <div class="panel">
+    <div class="display-wrap">
+      <canvas id="display" width="1152" height="576"></canvas>
+    </div>
+
+    <div class="controls">
+      <button id="btn-jobs">Jobs</button>
+      <button id="btn-github">GitHub</button>
+      <button id="btn-openclaw">OpenClaw</button>
+      <div class="sep"></div>
+      <button id="btn-account">Account</button>
+      <button id="btn-view">Next view</button>
+      <button id="btn-back">Back</button>
+      <button id="btn-refresh">Refresh</button>
+    </div>
+    <div class="controls list-btns">
+      <span style="color:#8b94a7;font-size:11px;padding:6px 0">List click:</span>
+      <button id="btn-list-0">Item 0</button>
+      <button id="btn-list-1">Item 1</button>
+      <button id="btn-list-2">Item 2</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="log-label">Bridge calls (SDK methods that would fire)</div>
+    <div class="log" id="bridge-log"></div>
+
+    <div class="log-label">State machine</div>
+    <div class="log" id="state-log"></div>
+  </div>
+</div>
+
+<script type="module">
+  // Update status bar every 200ms
+  setInterval(() => {
+    document.getElementById('st-screen').textContent = window.__sim_current ?? '?';
+    document.getElementById('st-detail').textContent = window.__sim_detail ?? '—';
+    document.getElementById('st-busy').textContent = window.__sim_busy ? 'YES' : 'no';
+    document.getElementById('st-tab').textContent = window.__sim_tab ?? 'prs';
+  }, 200);
+</script>
+<script type="module" src="/src/sim.ts"></script>
